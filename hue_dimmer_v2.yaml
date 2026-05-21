@@ -1,0 +1,234 @@
+blueprint:
+  name: Philips Hue Dimmer V2 (Z2M)
+  description: Control lights with a Philips Hue Dimmer Switch via Zigbee2MQTT
+  domain: automation
+  input:
+    dimmer_device:
+      name: Dimmer Switch
+      description: The Philips Hue Dimmer device from Zigbee2MQTT
+      selector:
+        device:
+          integration: mqtt
+    light_target:
+      name: Light(s)
+      description: The light or lights to control
+      selector:
+        target:
+          entity:
+            domain: light
+    brightness_step:
+      name: Brightness Step
+      description: How much to change brightness per step when holding (%)
+      default: 10
+      selector:
+        number:
+          min: 5
+          max: 25
+          unit_of_measurement: "%"
+
+mode: restart
+triggers:
+  # ON button
+  - domain: mqtt
+    device_id: !input dimmer_device
+    type: action
+    subtype: on_press
+    trigger: device
+    id: on_press
+  - domain: mqtt
+    device_id: !input dimmer_device
+    type: action
+    subtype: on_press_release
+    trigger: device
+    id: on_press_release
+  - domain: mqtt
+    device_id: !input dimmer_device
+    type: action
+    subtype: on_hold
+    trigger: device
+    id: on_hold
+  - domain: mqtt
+    device_id: !input dimmer_device
+    type: action
+    subtype: on_hold_release
+    trigger: device
+    id: on_hold_release
+
+  # OFF button
+  - domain: mqtt
+    device_id: !input dimmer_device
+    type: action
+    subtype: off_press
+    trigger: device
+    id: off_press
+  - domain: mqtt
+    device_id: !input dimmer_device
+    type: action
+    subtype: off_press_release
+    trigger: device
+    id: off_press_release
+
+  # UP button
+  - domain: mqtt
+    device_id: !input dimmer_device
+    type: action
+    subtype: up_press
+    trigger: device
+    id: up_press
+  - domain: mqtt
+    device_id: !input dimmer_device
+    type: action
+    subtype: up_press_release
+    trigger: device
+    id: up_press_release
+  - domain: mqtt
+    device_id: !input dimmer_device
+    type: action
+    subtype: up_hold
+    trigger: device
+    id: up_hold
+  - domain: mqtt
+    device_id: !input dimmer_device
+    type: action
+    subtype: up_hold_release
+    trigger: device
+    id: up_hold_release
+
+  # DOWN button
+  - domain: mqtt
+    device_id: !input dimmer_device
+    type: action
+    subtype: down_press
+    trigger: device
+    id: down_press
+  - domain: mqtt
+    device_id: !input dimmer_device
+    type: action
+    subtype: down_press_release
+    trigger: device
+    id: down_press_release
+  - domain: mqtt
+    device_id: !input dimmer_device
+    type: action
+    subtype: down_hold
+    trigger: device
+    id: down_hold
+  - domain: mqtt
+    device_id: !input dimmer_device
+    type: action
+    subtype: down_hold_release
+    trigger: device
+    id: down_hold_release
+
+conditions: []
+actions:
+  - choose:
+      # ON button
+      - conditions:
+          - condition: trigger
+            id:
+              - on_press
+        sequence:
+          - action: light.toggle
+            target: !input light_target
+      - conditions:
+          - condition: trigger
+            id:
+              - on_press_release
+        sequence: []
+      - conditions:
+          - condition: trigger
+            id:
+              - on_hold
+        sequence:
+          - repeat:
+              count: 20
+              sequence:
+                - action: light.turn_on
+                  target: !input light_target
+                  data:
+                    brightness_step_pct: !input brightness_step
+                    transition: 0.5
+                - delay:
+                    milliseconds: 500
+      - conditions:
+          - condition: trigger
+            id:
+              - on_hold_release
+        sequence: []
+
+      # OFF button
+      - conditions:
+          - condition: trigger
+            id:
+              - off_press
+        sequence: []
+      - conditions:
+          - condition: trigger
+            id:
+              - off_press_release
+        sequence: []
+
+      # UP button
+      - conditions:
+          - condition: trigger
+            id:
+              - up_press
+        sequence: []
+      - conditions:
+          - condition: trigger
+            id:
+              - up_press_release
+        sequence: []
+      - conditions:
+          - condition: trigger
+            id:
+              - up_hold
+        sequence:
+          - repeat:
+              count: 20
+              sequence:
+                - action: light.turn_on
+                  target: !input light_target
+                  data:
+                    brightness_step_pct: !input brightness_step
+                    transition: 0.5
+                - delay:
+                    milliseconds: 500
+      - conditions:
+          - condition: trigger
+            id:
+              - up_hold_release
+        sequence: []
+
+      # DOWN button
+      - conditions:
+          - condition: trigger
+            id:
+              - down_press
+        sequence: []
+      - conditions:
+          - condition: trigger
+            id:
+              - down_press_release
+        sequence: []
+      - conditions:
+          - condition: trigger
+            id:
+              - down_hold
+        sequence:
+          - repeat:
+              count: 20
+              sequence:
+                - action: light.turn_on
+                  target: !input light_target
+                  data:
+                    brightness_step_pct: -{{ (blueprint_inputs.brightness_step | int) }}
+                    transition: 0.5
+                - delay:
+                    milliseconds: 500
+      - conditions:
+          - condition: trigger
+            id:
+              - down_hold_release
+        sequence: []
