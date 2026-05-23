@@ -1,92 +1,168 @@
 blueprint:
-  name: Philips Hue Dimmer V2 (Z2M)
-  description: Control lights with a Philips Hue Dimmer Switch via Zigbee2MQTT
+  name: Philips Hue Dimmer V2 (Z2M) — Scenes & Dimming
+  description: >
+    Control lights and scenes with a Philips Hue Dimmer Switch (V2 / RWL022)
+    paired through Zigbee2MQTT.
+
+
+    Button mapping:
+
+    - **ON**: short press toggles the light(s); held activates a scene (e.g. a
+      "reset" scene that sets 100% brightness and a color).
+
+    - **UP / DOWN**: short press steps brightness up/down by a configurable
+      amount; held ramps brightness continuously until released.
+
+    - **HUE** (bottom button): single press, double press and hold each activate
+      a different scene.
+
+
+    Double-press is **not** reported natively by the dimmer, so it is detected
+    with timing logic. That requires a dedicated `input_text` (Text) helper so
+    the press can be remembered across the automation's `restart` runs. Create
+    one Text helper under Settings → Devices & Services → Helpers and select it
+    below.
   domain: automation
   input:
-    dimmer_device:
-      name: Dimmer Switch
-      description: The Philips Hue Dimmer device from Zigbee2MQTT
-      selector:
-        device:
-          integration: mqtt
-    light_target:
-      name: Light(s)
-      description: The light or lights to control
-      selector:
-        target:
-          entity:
-            domain: light
-    brightness_step:
-      name: Brightness Step
-      description: How much to change brightness per step when holding (%)
-      default: 10
-      selector:
-        number:
-          min: 5
-          max: 25
-          unit_of_measurement: "%"
+    devices:
+      name: Devices & Lights
+      icon: mdi:remote
+      input:
+        dimmer_device:
+          name: Dimmer Switch
+          description: The Philips Hue Dimmer device from Zigbee2MQTT.
+          selector:
+            device:
+              integration: mqtt
+        light_target:
+          name: Light(s)
+          description: The light or lights to control.
+          selector:
+            target:
+              entity:
+                domain: light
+    brightness:
+      name: Brightness
+      icon: mdi:brightness-6
+      input:
+        brightness_step:
+          name: Brightness Step
+          description: >
+            How much to change brightness per step — used both for a single
+            UP/DOWN press and for each step while holding (%).
+          default: 10
+          selector:
+            number:
+              min: 5
+              max: 25
+              step: 1
+              unit_of_measurement: "%"
+              mode: slider
+    scenes:
+      name: Scenes
+      icon: mdi:palette
+      input:
+        scene_on_hold:
+          name: ON held → scene
+          description: >
+            Scene to activate when the ON/power button is held. Leave empty to
+            do nothing.
+          default: ""
+          selector:
+            entity:
+              domain: scene
+        scene_hue_single:
+          name: HUE single press → scene
+          description: Scene to activate on a single press of the hue button. Leave empty to do nothing.
+          default: ""
+          selector:
+            entity:
+              domain: scene
+        scene_hue_double:
+          name: HUE double press → scene
+          description: Scene to activate on a double press of the hue button. Leave empty to do nothing.
+          default: ""
+          selector:
+            entity:
+              domain: scene
+        scene_hue_hold:
+          name: HUE held → scene
+          description: Scene to activate when the hue button is held. Leave empty to do nothing.
+          default: ""
+          selector:
+            entity:
+              domain: scene
+    advanced:
+      name: Double-press detection
+      icon: mdi:gesture-double-tap
+      collapsed: true
+      input:
+        helper_last_press:
+          name: Helper — last hue press (input_text)
+          description: >
+            A dedicated Text (input_text) helper used to remember the last hue
+            press so single and double presses can be told apart. Create one
+            under Settings → Devices & Services → Helpers and use it only for
+            this automation.
+          selector:
+            entity:
+              domain: input_text
+        double_click_window:
+          name: Double-press window
+          description: >
+            Maximum time between two hue-button presses for them to count as a
+            double press. A single press is delayed by this amount before its
+            scene fires.
+          default: 0.4
+          selector:
+            number:
+              min: 0.2
+              max: 1.0
+              step: 0.05
+              unit_of_measurement: s
+              mode: slider
 
 mode: restart
+max_exceeded: silent
+
+variables:
+  brightness_step: !input brightness_step
+  scene_on_hold: !input scene_on_hold
+  scene_hue_single: !input scene_hue_single
+  scene_hue_double: !input scene_hue_double
+  scene_hue_hold: !input scene_hue_hold
+  helper_last_press: !input helper_last_press
+  double_click_window: !input double_click_window
+
 triggers:
-  # ON button
-  - domain: mqtt
-    device_id: !input dimmer_device
-    type: action
-    subtype: on_press
-    trigger: device
-    id: on_press
+  # ON / power button — short press toggles, hold runs a scene
   - domain: mqtt
     device_id: !input dimmer_device
     type: action
     subtype: on_press_release
     trigger: device
-    id: on_press_release
+    id: power_toggle
   - domain: mqtt
     device_id: !input dimmer_device
     type: action
     subtype: on_hold
     trigger: device
-    id: on_hold
-  - domain: mqtt
-    device_id: !input dimmer_device
-    type: action
-    subtype: on_hold_release
-    trigger: device
-    id: on_hold_release
+    id: power_hold
 
-  # OFF button
-  - domain: mqtt
-    device_id: !input dimmer_device
-    type: action
-    subtype: off_press
-    trigger: device
-    id: off_press
-  - domain: mqtt
-    device_id: !input dimmer_device
-    type: action
-    subtype: off_press_release
-    trigger: device
-    id: off_press_release
-
-  # UP button
-  - domain: mqtt
-    device_id: !input dimmer_device
-    type: action
-    subtype: up_press
-    trigger: device
-    id: up_press
+  # UP button — short press steps up, hold ramps up
   - domain: mqtt
     device_id: !input dimmer_device
     type: action
     subtype: up_press_release
     trigger: device
-    id: up_press_release
+    id: up_step
   - domain: mqtt
     device_id: !input dimmer_device
     type: action
     subtype: up_hold
     trigger: device
     id: up_hold
+  # Releasing restarts the automation, which cancels the ramp loop above.
   - domain: mqtt
     device_id: !input dimmer_device
     type: action
@@ -94,19 +170,13 @@ triggers:
     trigger: device
     id: up_hold_release
 
-  # DOWN button
-  - domain: mqtt
-    device_id: !input dimmer_device
-    type: action
-    subtype: down_press
-    trigger: device
-    id: down_press
+  # DOWN button — short press steps down, hold ramps down
   - domain: mqtt
     device_id: !input dimmer_device
     type: action
     subtype: down_press_release
     trigger: device
-    id: down_press_release
+    id: down_step
   - domain: mqtt
     device_id: !input dimmer_device
     type: action
@@ -120,26 +190,60 @@ triggers:
     trigger: device
     id: down_hold_release
 
+  # HUE button (reports as "off" in Z2M) — single / double / hold scenes
+  - domain: mqtt
+    device_id: !input dimmer_device
+    type: action
+    subtype: off_press_release
+    trigger: device
+    id: hue_short
+  - domain: mqtt
+    device_id: !input dimmer_device
+    type: action
+    subtype: off_hold
+    trigger: device
+    id: hue_hold
+
 conditions: []
+
 actions:
   - choose:
-      # ON button
+      # ─── ON / power: toggle ────────────────────────────────────────────
       - conditions:
           - condition: trigger
-            id:
-              - on_press
+            id: power_toggle
         sequence:
           - action: light.toggle
             target: !input light_target
+
+      # ─── ON / power: hold → scene ──────────────────────────────────────
       - conditions:
           - condition: trigger
-            id:
-              - on_press_release
-        sequence: []
+            id: power_hold
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ scene_on_hold not in [none, 'none', ''] }}"
+            then:
+              - action: scene.turn_on
+                target:
+                  entity_id: !input scene_on_hold
+
+      # ─── UP: single step ───────────────────────────────────────────────
       - conditions:
           - condition: trigger
-            id:
-              - on_hold
+            id: up_step
+        sequence:
+          - action: light.turn_on
+            target: !input light_target
+            data:
+              brightness_step_pct: "{{ brightness_step | int }}"
+              transition: 0.3
+
+      # ─── UP: hold → ramp up (cancelled on release via restart) ──────────
+      - conditions:
+          - condition: trigger
+            id: up_hold
         sequence:
           - repeat:
               count: 20
@@ -147,43 +251,26 @@ actions:
                 - action: light.turn_on
                   target: !input light_target
                   data:
-                    brightness_step_pct: !input brightness_step
+                    brightness_step_pct: "{{ brightness_step | int }}"
                     transition: 0.5
                 - delay:
                     milliseconds: 500
-      - conditions:
-          - condition: trigger
-            id:
-              - on_hold_release
-        sequence: []
 
-      # OFF button
+      # ─── DOWN: single step ─────────────────────────────────────────────
       - conditions:
           - condition: trigger
-            id:
-              - off_press
-        sequence: []
-      - conditions:
-          - condition: trigger
-            id:
-              - off_press_release
-        sequence: []
+            id: down_step
+        sequence:
+          - action: light.turn_on
+            target: !input light_target
+            data:
+              brightness_step_pct: "{{ (brightness_step | int) * -1 }}"
+              transition: 0.3
 
-      # UP button
+      # ─── DOWN: hold → ramp down (cancelled on release via restart) ──────
       - conditions:
           - condition: trigger
-            id:
-              - up_press
-        sequence: []
-      - conditions:
-          - condition: trigger
-            id:
-              - up_press_release
-        sequence: []
-      - conditions:
-          - condition: trigger
-            id:
-              - up_hold
+            id: down_hold
         sequence:
           - repeat:
               count: 20
@@ -191,44 +278,79 @@ actions:
                 - action: light.turn_on
                   target: !input light_target
                   data:
-                    brightness_step_pct: !input brightness_step
+                    brightness_step_pct: "{{ (brightness_step | int) * -1 }}"
                     transition: 0.5
                 - delay:
                     milliseconds: 500
-      - conditions:
-          - condition: trigger
-            id:
-              - up_hold_release
-        sequence: []
 
-      # DOWN button
+      # ─── HUE: hold → scene ─────────────────────────────────────────────
       - conditions:
           - condition: trigger
-            id:
-              - down_press
-        sequence: []
-      - conditions:
-          - condition: trigger
-            id:
-              - down_press_release
-        sequence: []
-      - conditions:
-          - condition: trigger
-            id:
-              - down_hold
+            id: hue_hold
         sequence:
-          - repeat:
-              count: 20
-              sequence:
-                - action: light.turn_on
-                  target: !input light_target
-                  data:
-                    brightness_step_pct: -{{ (blueprint_inputs.brightness_step | int) }}
-                    transition: 0.5
-                - delay:
-                    milliseconds: 500
+          - if:
+              - condition: template
+                value_template: "{{ scene_hue_hold not in [none, 'none', ''] }}"
+            then:
+              - action: scene.turn_on
+                target:
+                  entity_id: !input scene_hue_hold
+
+      # ─── HUE: short press → single vs. double detection ────────────────
+      # A first short press records a timestamp in the helper, waits the
+      # double-press window, then fires the single-press scene if no second
+      # press arrived. A second short press inside the window restarts this
+      # automation; the new run sees the recent timestamp and fires the
+      # double-press scene instead.
       - conditions:
           - condition: trigger
-            id:
-              - down_hold_release
-        sequence: []
+            id: hue_short
+        sequence:
+          - choose:
+              # Second press within the window → DOUBLE
+              - conditions:
+                  - condition: template
+                    value_template: >-
+                      {{ (states(helper_last_press) | float(0)) > 0
+                         and (now().timestamp() - (states(helper_last_press) | float(0)))
+                             < (double_click_window | float) }}
+                sequence:
+                  - action: input_text.set_value
+                    target:
+                      entity_id: !input helper_last_press
+                    data:
+                      value: "0"
+                  - if:
+                      - condition: template
+                        value_template: "{{ scene_hue_double not in [none, 'none', ''] }}"
+                    then:
+                      - action: scene.turn_on
+                        target:
+                          entity_id: !input scene_hue_double
+            # First press → record time, wait, then fire SINGLE if not superseded
+            default:
+              - variables:
+                  press_token: "{{ now().timestamp() }}"
+              - action: input_text.set_value
+                target:
+                  entity_id: !input helper_last_press
+                data:
+                  value: "{{ press_token }}"
+              - delay:
+                  seconds: "{{ double_click_window | float }}"
+              # If a double press happened, this run was already cancelled by the
+              # restart. This gate also covers any race where it was not.
+              - condition: template
+                value_template: "{{ states(helper_last_press) == press_token }}"
+              - action: input_text.set_value
+                target:
+                  entity_id: !input helper_last_press
+                data:
+                  value: "0"
+              - if:
+                  - condition: template
+                    value_template: "{{ scene_hue_single not in [none, 'none', ''] }}"
+                then:
+                  - action: scene.turn_on
+                    target:
+                      entity_id: !input scene_hue_single
