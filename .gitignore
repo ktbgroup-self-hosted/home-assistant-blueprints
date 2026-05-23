@@ -427,3 +427,7 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Claude Code local machinery (worktrees/jobs) — never commit
+.claude/worktrees/
+.claude/jobs/
